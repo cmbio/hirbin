@@ -10,6 +10,7 @@ def runUclust(path,identityCutoff,usearchpath):
       #if aborted continue at previous stage
       args=[usearchpath, '-cluster_fast', path+f , '-id', str(identityCutoff), '-uc', outpath+f+'.uc']
       p=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+      text=p.communicate()[1]
 if __name__=='__main__':
   import sys
   runUclust(sys.argv[1],sys.argv[2])
