@@ -29,6 +29,7 @@ def parseArgs():
   parser.add_argument('--onlyClustering', dest='onlyClustering',action="store_true",help='Perform only clustering and parsing. Use when files for clustering already exists in the hirbin directory. (e.g. rerun clustering with new parameters).')
   parser.add_argument('--onlyParsing', dest='onlyParsing',action="store_true",help='Perform only parsing. Use when files after clustering already exists in the hirbin directory.')
   parser.add_argument('-f',dest='force_output_directory',action="store_true",help='Force, if the output directory should be overwritten')
+  parser.add_argument('--usearchPath',dest='usearchpath',default='usearch',help='The path to the usearch program (default = %(default)s)')
   arguments=parser.parse_args(sys.argv[1:]) 
   return arguments
 
@@ -198,7 +199,7 @@ def getSubBins(groups,clustpath,cutoffnumber,minMeanCount,identity,countDict):
 
 
 
-def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,onlyClustering,onlyParsing,force):
+def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,onlyClustering,onlyParsing,force,usearchpath):
   #reading metadata file and creating output directory
   metadata=Hirbin_run(output_directory)
   metadata.readMetadata(mappingFile)
@@ -213,7 +214,7 @@ def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,onlyCluster
       print "Output directory already exists, you can use an already existing output directory by including the flag -f"
       raise
   if not onlyParsing:
-    runUclust(output_directory+"/forClustering/",identity) #run the clustering step
+    runUclust(output_directory+"/forClustering/",identity,usearchpath) #run the clustering step
   countDict=getCountStruct(metadata) #read the results from the mapping
   getSubBins(metadata.groups,output_directory+"/clust"+str(identity),p,minMeanCount,identity,countDict) #get the results from clustering
   domains=createAbundanceMatrix(metadata,p,minMeanCount) #create abundance matrix
@@ -224,5 +225,5 @@ if __name__=='__main__':
     arguments.onlyClustering=True
   if arguments.onlyClustering==True:
     arguments.force_output_directory=True
-  main(arguments.mapping_file,arguments.output_dir,arguments.type,arguments.p,arguments.minMeanCount,arguments.identity,arguments.n,arguments.onlyClustering,arguments.onlyParsing,arguments.force_output_directory)
+  main(arguments.mapping_file,arguments.output_dir,arguments.type,arguments.p,arguments.minMeanCount,arguments.identity,arguments.n,arguments.onlyClustering,arguments.onlyParsing,arguments.force_output_directory,arguments.usearchpath)
 

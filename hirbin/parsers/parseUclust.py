@@ -13,7 +13,7 @@ def getClusterStruct(filename):
         if line[0] in ["S","H"] :
            line=line.split("\t")
            clusterID=int(line[1])
-           target=line[8]
+           target=line[8].split()[0]
            if clusterID not in clusters:
               clusters[clusterID]=[]
               clusters[clusterID].append(target)
