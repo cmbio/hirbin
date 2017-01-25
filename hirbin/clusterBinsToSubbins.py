@@ -5,7 +5,7 @@
 from hirbin import *
 from hirbin.parsers import *
 from hirbin.thirdparty import runUclust
-import os
+import os,glob
 from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from Bio.SeqRecord import SeqRecord
@@ -26,6 +26,7 @@ def parseArgs():
   parser.add_argument('-p','--minRepresented', dest='p', default=0.75, help='Require non-zero counts in at least the fraction p of the samples for the bin/sub-bin to be representative. (default:  %(default)s)')
   parser.add_argument('--minMeanCount', dest='minMeanCount', default=3, help='Minimum mean count per sample for the bin/sub-bin to be representative. (default:  %(default)s)')
   parser.add_argument('-n', dest='n',help='number of threads (default = %(default)s)',default=1, type=int)
+  parser.add_argument('--clusteringMethod', dest='clusteringMethod',default='uclust',help='Clustering method to use, "uclust" for uclust cluster_fast method and "agg" for usearch cluster_agg method (agglomerative hierarchical clustering with average linkage) default:  %(default)s')
   parser.add_argument('--onlyClustering', dest='onlyClustering',action="store_true",help='Perform only clustering and parsing. Use when files for clustering already exists in the hirbin directory. (e.g. rerun clustering with new parameters).')
   parser.add_argument('--onlyParsing', dest='onlyParsing',action="store_true",help='Perform only parsing. Use when files after clustering already exists in the hirbin directory.')
   parser.add_argument('-f',dest='force_output_directory',action="store_true",help='Force, if the output directory should be overwritten')
@@ -122,7 +123,7 @@ def extractSequences(metadata,n,force):
   p.map(extract_sequences_one_sample,arglist)
   getSequencesPerDomain(metadata)
   
-def getSubBins(groups,clustpath,cutoffnumber,minMeanCount,identity,countDict):
+def getSubBins(groups,clustpath,cutoffnumber,minMeanCount,identity,countDict,clusteringMethod):
   '''
     Creating a dictonary with the structure of the sub-bins, i.e. which contigs that are included in each sub-bin.
     The sub-bins not passing the criteria numberOfSamples > cutoffnumber and meanCount>minMeanCount are excluded.
@@ -130,15 +131,24 @@ def getSubBins(groups,clustpath,cutoffnumber,minMeanCount,identity,countDict):
   samplelisttotal=groups.keys()
   cutoffnumber=float(cutoffnumber)
   cutoff=round(len(samplelisttotal)*cutoffnumber)
-  domainlist=os.listdir(clustpath)
-  directory="clust"+str(identity) #loop through each ID cutoff
-  print "Getting subBins for " + directory
+  if clusteringMethod=='uclust':
+    domainlist=glob.glob(clustpath+'/*.fasta.uc')
+  if clusteringMethod=='agg':
+    domainlist=glob.glob(clustpath+'/*.fasta.hclust')
+  directory="clust"+str(identity) # ID cutoff
+  print "Getting sub-bins for " + directory
   countsvec={}#initiate counts vector
   countsvec[directory]={} #initiate counts vector
   for fname in domainlist:
-    domain=fname.rstrip('.fasta.uc')
+    if clusteringMethod=='uclust':
+      domain=fname.rstrip('.fasta.uc').split('/')[-1]
+    if clusteringMethod=='agg':
+      domain=fname.rstrip('fasta.hclust').split('/')[-1]
     countsvec[directory][domain]={} #initiate counts vector
-    clusters=getClusterStruct(clustpath+'/'+fname)
+    if clusteringMethod=='uclust':
+      clusters=getClusterStruct(fname)
+    if clusteringMethod=='agg':
+      clusters=getClusterStructHclust(fname)
     for key in clusters.keys(): #for each cluster, check if the cluster is large enough for statistical testing
       #if n>=cutoff: #if the cluster is large enough, get the counts from results file.
       samplelist=[]
@@ -180,7 +190,10 @@ def getSubBins(groups,clustpath,cutoffnumber,minMeanCount,identity,countDict):
   #countsvec[directory][domain][key][sample]=samplecount
   
   print "Writing counts to file for " + directory
-  g=open(clustpath+'/../abundance_matrix_subbins_'+directory+'.txt','w')
+  if clusteringMethod=='uclust':
+    g=open(clustpath+'/../abundance_matrix_subbins_'+directory+'.txt','w')
+  if clusteringMethod=='agg':
+     g=open(clustpath+'/../abundance_matrix_subbins_'+directory+'_hclust.txt','w')
   samplelisttotal=sorted(samplelisttotal)
   for s in samplelisttotal:
       g.write('\t'+s)
@@ -199,12 +212,13 @@ def getSubBins(groups,clustpath,cutoffnumber,minMeanCount,identity,countDict):
 
 
 
-def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,onlyClustering,onlyParsing,force,usearchpath):
+def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,clusteringMethod,onlyClustering,onlyParsing,force,usearchpath):
   #reading metadata file and creating output directory
   metadata=Hirbin_run(output_directory)
   metadata.readMetadata(mappingFile)
   output_directory=metadata.createOutputDirectory(output_directory)
   metadata.output_directory=output_directory
+  clusteringMethod=clusteringMethod.lower()
   if not onlyClustering:
     extractSequences(metadata,n,force)
   try:
@@ -214,9 +228,9 @@ def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,onlyCluster
       print "Output directory already exists, you can use an already existing output directory by including the flag -f"
       raise
   if not onlyParsing:
-    runUclust(output_directory+"/forClustering/",identity,usearchpath) #run the clustering step
+    runUclust(output_directory+"/forClustering/",identity,usearchpath,clusteringMethod) #run the clustering step
   countDict=getCountStruct(metadata) #read the results from the mapping
-  getSubBins(metadata.groups,output_directory+"/clust"+str(identity),p,minMeanCount,identity,countDict) #get the results from clustering
+  getSubBins(metadata.groups,output_directory+"/clust"+str(identity),p,minMeanCount,identity,countDict,clusteringMethod) #get the results from clustering
   domains=createAbundanceMatrix(metadata,p,minMeanCount) #create abundance matrix
 
 if __name__=='__main__':
@@ -225,5 +239,9 @@ if __name__=='__main__':
     arguments.onlyClustering=True
   if arguments.onlyClustering==True:
     arguments.force_output_directory=True
-  main(arguments.mapping_file,arguments.output_dir,arguments.type,arguments.p,arguments.minMeanCount,arguments.identity,arguments.n,arguments.onlyClustering,arguments.onlyParsing,arguments.force_output_directory,arguments.usearchpath)
+  print arguments.clusteringMethod.lower()
+  if arguments.clusteringMethod.lower() not in ['agg','uclust']:
+    print 'clusteringMethod should be either of "uclust" or "agg"'
+    sys.exit()
+  main(arguments.mapping_file,arguments.output_dir,arguments.type,arguments.p,arguments.minMeanCount,arguments.identity,arguments.n,arguments.clusteringMethod,arguments.onlyClustering,arguments.onlyParsing,arguments.force_output_directory,arguments.usearchpath)
 
