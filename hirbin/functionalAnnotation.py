@@ -43,24 +43,35 @@ def translateOneSample(argument):
   '''Subroutine for translating one sample on one cpu'''
   os.system('transeq --frame 6 ' + argument)
   
-def runHMMer(sample_dict,ncpus,output_dir,database_dir,evalue_cutoff,protseq_dir):
+def runHMMer(sample_dict,ncpus,output_dir,database_dir,evalue_cutoff,protseq_dir,type):
   ''' Run HMMer to perform functional annotation for all samples using n cpu:s'''
   p=Pool(ncpus)
-  arglist=['--domtblout ' + output_dir +'/hmmeroutput/' + name + '.hmmout -E ' + evalue_cutoff + ' ' + database_dir + ' ' +  protseq_dir + '/'+ name +'.pep' for name in sample_dict.keys()]
+  if type.lower().startswith('prot'):
+    arglist=['--domtblout ' + output_dir +'/hmmeroutput/' + name + '.hmmout -E ' + evalue_cutoff + ' ' + database_dir + ' ' +  path for (name,path) in sample_dict.iteritems()]
+  else:
+    arglist=['--domtblout ' + output_dir +'/hmmeroutput/' + name + '.hmmout -E ' + evalue_cutoff + ' ' + database_dir + ' ' +  protseq_dir + '/'+ name +'.pep' for name in sample_dict.keys()]
   p.map(functionalAnnotationOneSample,arglist)
 
 def functionalAnnotationOneSample(argument):
   ''' Run HMMer for one sample using 1 cpu'''
   os.system('hmmsearch '+ argument +'> /dev/null') #dispose unwanted output to /dev/null
 
-def runConvertCoord(sample_dict,output_directory,protseq_dir,max_acceptable_overlap,tentacle_format):
+def runConvertCoord(sample_dict,output_directory,protseq_dir,max_acceptable_overlap,tentacle_format,type):
   '''Convert coordinates from protein to nucleotides and save in a file for annotation'''
-  for name in sample_dict:
-    if tentacle_format:
-      outputfilename=output_directory+'/'+name+'.tab'
-    else:
-      outputfilename=output_directory+'/'+name+'.gff'
-    convert_coordinates(protseq_dir+'/'+name+'.pep',output_directory+'/hmmeroutput/' + name + '.hmmout',outputfilename,tentacle_format,max_acceptable_overlap)
+  if type.lower().startswith('prot'):
+    for (name,path) in sample_dict.iteritems():
+      if tentacle_format:
+        outputfilename=output_directory+'/'+name+'.tab'
+      else:
+        outputfilename=output_directory+'/'+name+'.gff'
+      convert_coordinates(path,output_directory+'/hmmeroutput/' + name + '.hmmout',outputfilename,tentacle_format,max_acceptable_overlap)
+  else:
+    for name in sample_dict:
+      if tentacle_format:
+        outputfilename=output_directory+'/'+name+'.tab'
+      else:
+        outputfilename=output_directory+'/'+name+'.gff'
+      convert_coordinates(protseq_dir+'/'+name+'.pep',output_directory+'/hmmeroutput/' + name + '.hmmout',outputfilename,tentacle_format,max_acceptable_overlap)
 
 
 def main(mapping_file,database_dir,output_directory,type,ncpus,evalue_cutoff,force,max_acceptable_overlap,tentacle_format):
@@ -68,7 +79,7 @@ def main(mapping_file,database_dir,output_directory,type,ncpus,evalue_cutoff,for
   metadata.readMetadata(mapping_file)
   output_directory=metadata.createOutputDirectory(output_directory)
   metadata.output_directory=output_directory
-  if type.startswith("nucl"):
+  if type.lower().startswith("nucl"):
     #if protein sequences are missing, run translation
     try:
       mkdir(output_directory+'/protseq/')
@@ -77,16 +88,19 @@ def main(mapping_file,database_dir,output_directory,type,ncpus,evalue_cutoff,for
         print "Output directory already exists, you can use an already existing output directory by including the flag -f"
         raise
     protseq_dir=runTranslation(metadata.reference,ncpus,output_directory)
-    try:
-      mkdir(output_directory+'/hmmeroutput/')
-    except OSError as e:
-      if not force:
-        print "Output directory already exists, you can use an already existing output directory by including the flag -f"
-        raise
     protseq_dir=output_directory+'/protseq/'
-    runHMMer(metadata.reference,ncpus,output_directory,database_dir,evalue_cutoff,protseq_dir)
-    runConvertCoord(metadata.reference,output_directory,protseq_dir,max_acceptable_overlap,tentacle_format)
-    #perform functional annotation using HMMer
+  if type.lower().startswith('prot'):
+    protseq_dir=""
+  try:
+    mkdir(output_directory+'/hmmeroutput/')
+  except OSError as e:
+    if not force:
+      print "Output directory already exists, you can use an already existing output directory by including the flag -f"
+      raise
+  runHMMer(metadata.reference,ncpus,output_directory,database_dir,evalue_cutoff,protseq_dir,type)
+  runConvertCoord(metadata.reference,output_directory,protseq_dir,max_acceptable_overlap,tentacle_format,type)
+  
+  #perform functional annotation using HMMer
 
 if __name__=='__main__':
   arguments=parseArgs(sys.argv[1:])

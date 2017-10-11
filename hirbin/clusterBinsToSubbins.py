@@ -29,6 +29,7 @@ def parseArgs():
   parser.add_argument('--clusteringMethod', dest='clusteringMethod',default='uclust',help='Clustering method to use, "uclust" for uclust cluster_fast method and "agg" for usearch cluster_agg method (agglomerative hierarchical clustering with average linkage) default:  %(default)s')
   parser.add_argument('--onlyClustering', dest='onlyClustering',action="store_true",help='Perform only clustering and parsing. Use when files for clustering already exists in the hirbin directory. (e.g. rerun clustering with new parameters).')
   parser.add_argument('--onlyParsing', dest='onlyParsing',action="store_true",help='Perform only parsing. Use when files after clustering already exists in the hirbin directory.')
+  parser.add_argument('--onlyExtract', dest='onlyExtract',action="store_true",help='Extract only the amino acid sequences, no clustering. Use when clustering will be performed in another way (e.g. multiple alignment).')
   parser.add_argument('-f',dest='force_output_directory',action="store_true",help='Force, if the output directory should be overwritten')
   parser.add_argument('--usearchPath',dest='usearchpath',default='usearch',help='The path to the usearch program (default = %(default)s)')
   arguments=parser.parse_args(sys.argv[1:]) 
@@ -212,7 +213,7 @@ def getSubBins(groups,clustpath,cutoffnumber,minMeanCount,identity,countDict,clu
 
 
 
-def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,clusteringMethod,onlyClustering,onlyParsing,force,usearchpath):
+def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,clusteringMethod,onlyClustering,onlyParsing,force,usearchpath,onlyExtract):
   #reading metadata file and creating output directory
   metadata=Hirbin_run(output_directory)
   metadata.readMetadata(mappingFile)
@@ -221,17 +222,18 @@ def main(mappingFile,output_directory,type,p,minMeanCount,identity,n,clusteringM
   clusteringMethod=clusteringMethod.lower()
   if not onlyClustering:
     extractSequences(metadata,n,force)
-  try:
-    os.mkdir(output_directory+'/clust'+str(identity)) #create a directory for the clustering files
-  except OSError as e:
-    if not force:
-      print "Output directory already exists, you can use an already existing output directory by including the flag -f"
-      raise
-  if not onlyParsing:
-    runUclust(output_directory+"/forClustering/",identity,usearchpath,clusteringMethod) #run the clustering step
-  countDict=getCountStruct(metadata) #read the results from the mapping
-  getSubBins(metadata.groups,output_directory+"/clust"+str(identity),p,minMeanCount,identity,countDict,clusteringMethod) #get the results from clustering
-  domains=createAbundanceMatrix(metadata,p,minMeanCount) #create abundance matrix
+  if not onlyExtract:
+    try:
+      os.mkdir(output_directory+'/clust'+str(identity)) #create a directory for the clustering files
+    except OSError as e:
+      if not force:
+        print "Output directory already exists, you can use an already existing output directory by including the flag -f"
+        raise
+    if not onlyParsing:
+      runUclust(output_directory+"/forClustering/",identity,usearchpath,clusteringMethod) #run the clustering step
+    countDict=getCountStruct(metadata) #read the results from the mapping
+    getSubBins(metadata.groups,output_directory+"/clust"+str(identity),p,minMeanCount,identity,countDict,clusteringMethod) #get the results from clustering
+    domains=createAbundanceMatrix(metadata,p,minMeanCount) #create abundance matrix
 
 if __name__=='__main__':
   arguments=parseArgs()
@@ -243,5 +245,5 @@ if __name__=='__main__':
   if arguments.clusteringMethod.lower() not in ['agg','uclust']:
     print 'clusteringMethod should be either of "uclust" or "agg"'
     sys.exit()
-  main(arguments.mapping_file,arguments.output_dir,arguments.type,arguments.p,arguments.minMeanCount,arguments.identity,arguments.n,arguments.clusteringMethod,arguments.onlyClustering,arguments.onlyParsing,arguments.force_output_directory,arguments.usearchpath)
+  main(arguments.mapping_file,arguments.output_dir,arguments.type,arguments.p,arguments.minMeanCount,arguments.identity,arguments.n,arguments.clusteringMethod,arguments.onlyClustering,arguments.onlyParsing,arguments.force_output_directory,arguments.usearchpath,arguments.onlyExtract)
 
